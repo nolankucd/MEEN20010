@@ -13118,7 +13118,7 @@ div#notebook {
 <div class="text_cell_render border-box-sizing rendered_html">
 <h1 id="Jupyter-Notebook-Setup-Guide-for-MEEN20010">Jupyter Notebook Setup Guide for MEEN20010<a class="anchor-link" href="#Jupyter-Notebook-Setup-Guide-for-MEEN20010">¶</a></h1><p>It is not necessary to install any software on your computer to explore these interactive course notes, however if you do wish to install the tools (and I would encourage it) this document will also guide you through the necessary steps needed to get Jupyter Notebooks running on your own machine. Guides are provided for Windows, Mac and Linux.</p>
 <p>If you do not want to install any software but want to interact with the code you can simply copy the GitHub URL of the notebook to Google CoLab (<a href="https://colab.research.google.com">https://colab.research.google.com</a>) and it'll run a copy right there in the browser for you. This should work on any device from desktop to smartphone.</p>
-<h2 id="Minimal-approach">Minimal approach<a class="anchor-link" href="#Minimal-approach">¶</a></h2><p>If you just want to read the notes and not worry about any computer code or software aspects of this module then you can use the PDF and HTML versions of the notes. These are available on GitHub and can be found via Brightspace. You can happily ignore the rest of this document.</p>
+<h2 id="Minimal-approach">Minimal approach<a class="anchor-link" href="#Minimal-approach">¶</a></h2><p>If you just want to read the notes and not worry about any computer code or software aspects of this module then you can use the HTML versions of the notes. These are available on GitHub and can be found via Brightspace. You can happily ignore the rest of this document.</p>
 
 </div>
 </div>
@@ -13285,9 +13285,16 @@ sudo apt-get install jupyter</code></pre>
 
 <pre><code>pip3 install scipy
 
-pip3 install matplotlib
+pip3 install matplotlib</code></pre>
+<p>Installing PyGEL3D is more difficult:</p>
 
-pip3 install pyGEL3D</code></pre>
+<pre><code>sudo apt-get install libglfw3-dev libglfw3
+git clone https://github.com/janba/GEL PyGEL3D
+cd PyGEL3D/
+mkdir build; cd build; cmake ..; make -j8 ; cd ..
+python3 setup.py bdist_wheel
+pip3 install dist/PyGEL3D-*.whl</code></pre>
+<p>Note, this does not appear to work in Google Colaboratory</p>
 <p>If you're having installation issues just email me or call by my office.</p>
 
 </div>
