@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particles with Energy Conservation</title>
+    <style>
+        #threeCanvas {
+            width: 800px;
+            height: 400px;
+            display: inline-block;
+        }
+    </style>
+    <script src="https://threejs.org/build/three.js"></script>
+
+</head>
+<body>
+    Some content before the canvas.
+
+    <div>
+    <!-- Slider to control the force -->
+    <label for="force">Force Intensity:</label>
+    <input type="range" id="force" min="-0.0005" max="0.0005" step="0.00001" value="0">
+    <span id="forceValue">0</span><br>
+    <span id="collisionCount">Collisions (Last 30 frames): 0</span>
+    </div>
+
+    <script>
+        let scene = new THREE.Scene();
+        let camera = new THREE.PerspectiveCamera(20, 2, 0.1, 50);
+        camera.position.set(0, 0, 14);
+        
+        let renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(800, 400);
+        renderer.setClearColor(0xFFFFFF);
+        document.body.appendChild(renderer.domElement);
+        renderer.domElement.id = 'threeCanvas';
+
+        // Box top face
+	const boxTopGeometry = new THREE.PlaneGeometry(8.1, 4.1);
+	const boxTopMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+	const boxTop = new THREE.Mesh(boxTopGeometry, boxTopMaterial);
+	boxTop.rotation.x = Math.PI / 2;
+	boxTop.position.y = 2.05;
+	scene.add(boxTop);
+
+	// Box bottom face
+	const boxBottomGeometry = new THREE.PlaneGeometry(8.1, 4.1);
+	const boxBottomMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+	const boxBottom = new THREE.Mesh(boxBottomGeometry, boxBottomMaterial);
+	boxBottom.rotation.x = -Math.PI / 2;
+	boxBottom.position.y = -2.05;
+	scene.add(boxBottom);
+
+        // Create box outline
+        const boxGeometry = new THREE.BoxGeometry(8.1, 4.1, 4.1);
+        const boxEdges = new THREE.EdgesGeometry(boxGeometry);
+        const boxMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const boxOutline = new THREE.LineSegments(boxEdges, boxMaterial);
+        scene.add(boxOutline);
+
+        let maxEnergy = 0.1;
+        let particleGeometry = new THREE.SphereGeometry(0.05);
+        let particles = [];
+        for (let i = 0; i < 200; i++) {
+            let initialColor = new THREE.Color().setHSL(Math.random(), 0.75, 0.5);
+            let particleMaterial = new THREE.MeshBasicMaterial({ color: initialColor });
+            let particle = new THREE.Mesh(particleGeometry, particleMaterial);
+            particle.position.set(
+              (Math.random() - 0.5) * 8,
+              (Math.random() - 0.5) * 4,
+              (Math.random() - 0.5) * 4);
+            particle.velocity = new THREE.Vector3(
+              (Math.random() - 0.5) * 0.1, 
+              (Math.random() - 0.5) * 0.1,
+              (Math.random() - 0.5) * 0.1);
+            particle.collidedY = false;
+            particle.collidedZ = false;
+            particles.push(particle);
+            scene.add(particle);
+        }
+
+        let forceIntensity = parseFloat(document.getElementById('force').value);
+        document.getElementById('force').addEventListener('input', function() {
+            forceIntensity = parseFloat(this.value);
+            document.getElementById('forceValue').textContent = this.value;
+        });
+
+        let collisionCounter = 70;
+        let frameCounter = 0;
+
+    const minColor = new THREE.Color(0x0000FF);  // Blue for 10 collisions
+    const maxColor = new THREE.Color(0xFF0000);  // Red for 50 collisions
+
+
+    let animate = function () {
+	if (frameCounter % 30 === 0) { 
+        document.getElementById('collisionCount').textContent = "Collisions (Last 30 frames): " + collisionCounter;
+
+        // Determine the interpolation factor based on the collision count
+        let factor = (collisionCounter-10) / 60;
+        factor = THREE.MathUtils.clamp(factor, 0, 1);  // Ensure factor stays within [0, 1]
+
+        // Interpolate between the two colors using the factor
+        const newColor = new THREE.Color().lerpColors(minColor, maxColor, factor);
+        boxTopMaterial.color.copy(newColor);
+        boxBottomMaterial.color.copy(newColor);
+        
+        collisionCounter = 0;
+    }
+    frameCounter++;
+
+    particles.forEach(particle => {
+        // Calculate energy before force is applied
+        let energyBefore = particle.velocity.lengthSq();
+
+        // Apply the force
+        particle.velocity.x += forceIntensity;
+
+        // Adjust y and z velocities to conserve kinetic energy
+        let energyAfter = particle.velocity.lengthSq();
+        let energyRatio = Math.sqrt(energyBefore / energyAfter);
+        particle.velocity.y *= energyRatio;
+        particle.velocity.z *= energyRatio;
+
+        particle.position.add(particle.velocity);
+
+        // Change particle color based on energy
+        let hue = (energyAfter / (2 * maxEnergy)) * 360; // considering maxEnergy is max velocity squared
+        particle.material.color.setHSL(hue / 360, 0.75, 0.5);
+
+        if (particle.position.x < -4) particle.position.x += 8;
+        if (particle.position.x > 4) particle.position.x -= 8;
+
+        if (particle.position.y < -2 || particle.position.y > 2) {
+            if (!particle.collidedY) {
+                particle.velocity.y = -particle.velocity.y;
+                collisionCounter++;
+                particle.collidedY = true;
+            }
+        } else {
+            particle.collidedY = false;
+        }
+
+        if (particle.position.z < -2 || particle.position.z > 2) {
+            if (!particle.collidedZ) {
+                particle.velocity.z = -particle.velocity.z;
+                collisionCounter++;
+                particle.collidedZ = true;
+            }
+        } else {
+            particle.collidedZ = false;
+        }
+    });
+    
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+};
+
+ 
+
+        animate();
+    </script>
+    
+
+    Some content after the canvas.
+</body>
+</html>
+
