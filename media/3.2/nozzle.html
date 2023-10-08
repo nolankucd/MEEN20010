@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Demo 7: Using a Slider</title>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.1.1/model-viewer.min.js"></script>
+
+<style>
+    model-viewer {
+        width: 600px;
+        height: 400px;
+     }
+  img {
+    max-width: 960px;
+    max-height: 520px;
+    width:auto;
+    height:auto;
+  }
+  body {
+    margin: 50px;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+  }
+ .container {
+    max-width: 800px;
+    margin-bottom: 20px;
+  }
+</style>
+</head>
+
+<body>
+
+<div>
+  <p>Use the slider to control area A2.</p>
+  <input id="area" type="range" style="width: 300px;" min="0" max="50" step="1" value="0">
+</div>
+    
+<model-viewer 
+    id="nozzle"
+    src="https://nolankucd.github.io/MEEN20010/media/3.2/nozzle.glb
+    camera-controls
+    interactionPrompt="none"
+</model-viewer>
+  
+</div>
+
+<script>
+    const areaSlider = document.getElementById("area");
+    const areaValue = document.getElementById("area-value");
+    const modelViewer = document.querySelector("#nozzle");
+  
+    areaSlider.addEventListener('input', event => {
+      modelViewer.animationName = 'KeyAction.001';
+      modelViewer.currentTime = event.target.value;
+      modelViewer.pause();
+    });
+</script>
+</body>
+</html>
