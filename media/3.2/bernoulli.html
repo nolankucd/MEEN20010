@@ -3,166 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Particles with Energy Conservation</title>
+    <title>Particle Pressure Simulation with Visual Feedback</title>
     <style>
-        #threeCanvas {
-            width: 800px;
-            height: 400px;
-            display: inline-block;
-        }
+        body, html { margin: 0; overflow: hidden; }
+        canvas { display: block; }
     </style>
-    <script src="https://threejs.org/build/three.js"></script>
-
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.module.js",
+                "OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.150.0/examples/jsm/controls/OrbitControls.js"
+            }
+        }
+    </script>
 </head>
 <body>
-    Move the slider to increase the kinetic energy. The number of collisions indicates the presure on the upper and lower walls.
-
-    <div>
-    <!-- Slider to control the force -->
-    <label for="force">Force Intensity:</label>
-    <input type="range" id="force" min="-0.0005" max="0.0005" step="0.00001" value="0">
-    <span id="forceValue">0</span><br>
-    <span id="collisionCount">Collisions (Last 30 frames): 0</span>
+    <div style="position: absolute; z-index: 1; top: 10px; left: 10px; padding: 10px; background: rgba(255,255,255,0.5);">
+        <label for="force">Force Intensity:</label>
+        <input type="range" id="force" min="-0.0005" max="0.0005" step="0.00001" value="0">
+        <span id="forceValue">0</span><br>
+        <span id="collisionCount">Collisions (Last 30 frames): 0</span><br>
+        <span id="meanVelocity">Mean Velocity: 0</span><br>
+        <button id="resetButton">Reset</button>
     </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'OrbitControls';
 
-    <script>
-        let scene = new THREE.Scene();
-        let camera = new THREE.PerspectiveCamera(20, 2, 0.1, 50);
-        camera.position.set(0, 0, 14);
-        
-        let renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(800, 400);
-        renderer.setClearColor(0xFFFFFF);
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 20);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0xffffff, 1);
         document.body.appendChild(renderer.domElement);
-        renderer.domElement.id = 'threeCanvas';
 
-        // Box top face
-	const boxTopGeometry = new THREE.PlaneGeometry(8.1, 4.1);
-	const boxTopMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-	const boxTop = new THREE.Mesh(boxTopGeometry, boxTopMaterial);
-	boxTop.rotation.x = Math.PI / 2;
-	boxTop.position.y = 2.05;
-	scene.add(boxTop);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
 
-	// Box bottom face
-	const boxBottomGeometry = new THREE.PlaneGeometry(8.1, 4.1);
-	const boxBottomMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-	const boxBottom = new THREE.Mesh(boxBottomGeometry, boxBottomMaterial);
-	boxBottom.rotation.x = -Math.PI / 2;
-	boxBottom.position.y = -2.05;
-	scene.add(boxBottom);
-
-        // Create box outline
-        const boxGeometry = new THREE.BoxGeometry(8.1, 4.1, 4.1);
+        const boxGeometry = new THREE.BoxGeometry(8, 4, 4);
         const boxEdges = new THREE.EdgesGeometry(boxGeometry);
         const boxMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
         const boxOutline = new THREE.LineSegments(boxEdges, boxMaterial);
         scene.add(boxOutline);
 
-        let maxEnergy = 0.1;
-        let particleGeometry = new THREE.SphereGeometry(0.05);
-        let particles = [];
-        for (let i = 0; i < 200; i++) {
-            let initialColor = new THREE.Color().setHSL(Math.random(), 0.75, 0.5);
-            let particleMaterial = new THREE.MeshBasicMaterial({ color: initialColor });
-            let particle = new THREE.Mesh(particleGeometry, particleMaterial);
+        const minColor = new THREE.Color(0x0000FF);  // Blue for minimum collisions (5)
+        const maxColor = new THREE.Color(0xFF0000);  // Red for maximum collisions (50)
+        const planeMaterialTop = new THREE.MeshBasicMaterial({ color: minColor, side: THREE.DoubleSide });
+        const planeMaterialBottom = new THREE.MeshBasicMaterial({ color: minColor, side: THREE.DoubleSide });
+        const topPlane = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), planeMaterialTop);
+        topPlane.position.set(0, 2, 0);
+        topPlane.rotation.x = Math.PI / 2;
+        scene.add(topPlane);
+        const bottomPlane = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), planeMaterialBottom);
+        bottomPlane.position.set(0, -2, 0);
+        bottomPlane.rotation.x = Math.PI / 2;
+        scene.add(bottomPlane);
+
+        const particleGeometry = new THREE.SphereGeometry(0.05, 32, 16);
+        const particles = [];
+        let collisionCounter = 0;
+        let frameCounter = 0;
+
+        // Initialize particles
+        for (let i = 0; i < 400; i++) {
+            const particleMaterial = new THREE.MeshBasicMaterial({
+                color: new THREE.Color().setHSL(Math.random(), 0.75, 0.5)
+            });
+            const particle = new THREE.Mesh(particleGeometry, particleMaterial);
             particle.position.set(
-              (Math.random() - 0.5) * 8,
-              (Math.random() - 0.5) * 4,
-              (Math.random() - 0.5) * 4);
+                (Math.random() - 0.5) * 8,
+                (Math.random() - 0.5) * 4,
+                (Math.random() - 0.5) * 4
+            );
             particle.velocity = new THREE.Vector3(
-              (Math.random() - 0.5) * 0.1, 
-              (Math.random() - 0.5) * 0.1,
-              (Math.random() - 0.5) * 0.1);
-            particle.collidedY = false;
-            particle.collidedZ = false;
-            particles.push(particle);
+                (Math.random() - 0.5) * 0.1,
+                (Math.random() - 0.5) * 0.1,
+                (Math.random() - 0.5) * 0.1
+            );
             scene.add(particle);
+            particles.push(particle);
         }
 
-        let forceIntensity = parseFloat(document.getElementById('force').value);
+        let forceIntensityX = 0;
         document.getElementById('force').addEventListener('input', function() {
-            forceIntensity = parseFloat(this.value);
+            forceIntensityX = parseFloat(this.value);
             document.getElementById('forceValue').textContent = this.value;
         });
 
-        let collisionCounter = 70;
-        let frameCounter = 0;
+        document.getElementById('resetButton').addEventListener('click', function() {
+            particles.forEach(particle => {
+                particle.velocity.set(
+                    (Math.random() - 0.5) * 0.1,
+                    (Math.random() - 0.5) * 0.1,
+                    (Math.random() - 0.5) * 0.1
+                );
+                particle.position.set(
+                    (Math.random() - 0.5) * 8,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                );
+            });
+            forceIntensityX = 0;
+            document.getElementById('force').value = 0;
+            document.getElementById('forceValue').textContent = '0';
+            collisionCounter = 0;
+            document.getElementById('collisionCount').textContent = "Collisions (Last 30 frames): 0";
+            updateColor(0);  // Reset colors on reset
+        });
 
-    const minColor = new THREE.Color(0x0000FF);  // Blue for 10 collisions
-    const maxColor = new THREE.Color(0xFF0000);  // Red for 50 collisions
+        function updateColor(collisionCount) {
+            const factor = (collisionCount - 1) / (70 - 1);
+            const clampedFactor = THREE.MathUtils.clamp(factor, 0, 1);
+            const newColor = minColor.clone().lerp(maxColor, clampedFactor);
+            planeMaterialTop.color.copy(newColor);
+            planeMaterialBottom.color.copy(newColor);
+        }
 
-
-    let animate = function () {
-	if (frameCounter % 30 === 0) { 
-        document.getElementById('collisionCount').textContent = "Collisions (Last 30 frames): " + collisionCounter;
-
-        // Determine the interpolation factor based on the collision count
-        let factor = (collisionCounter-10) / 60;
-        factor = THREE.MathUtils.clamp(factor, 0, 1);  // Ensure factor stays within [0, 1]
-
-        // Interpolate between the two colors using the factor
-        const newColor = new THREE.Color().lerpColors(minColor, maxColor, factor);
-        boxTopMaterial.color.copy(newColor);
-        boxBottomMaterial.color.copy(newColor);
-        
-        collisionCounter = 0;
-    }
+function animate() {
+    requestAnimationFrame(animate);
     frameCounter++;
 
+    let totalXVelocity = 0; // Reset total x velocity for each frame
+
     particles.forEach(particle => {
-        // Calculate energy before force is applied
-        let energyBefore = particle.velocity.lengthSq();
-
-        // Apply the force
-        particle.velocity.x += forceIntensity;
-
-        // Adjust y and z velocities to conserve kinetic energy
-        let energyAfter = particle.velocity.lengthSq();
-        let energyRatio = Math.sqrt(energyBefore / energyAfter);
-        particle.velocity.y *= energyRatio;
-        particle.velocity.z *= energyRatio;
-
+        const energyBefore = 0.5 * particle.velocity.lengthSq();
+        particle.velocity.x += forceIntensityX;
+        const energyAfter = 0.5 * particle.velocity.lengthSq();
+        const energyRatio = Math.sqrt(energyBefore / energyAfter);
+        particle.velocity.multiplyScalar(energyRatio);
         particle.position.add(particle.velocity);
+        totalXVelocity += particle.velocity.x; // Accumulate x velocity
 
-        // Change particle color based on energy
-        let hue = (energyAfter / (2 * maxEnergy)) * 360; // considering maxEnergy is max velocity squared
-        particle.material.color.setHSL(hue / 360, 0.75, 0.5);
-
-        if (particle.position.x < -4) particle.position.x += 8;
-        if (particle.position.x > 4) particle.position.x -= 8;
-
-        if (particle.position.y < -2 || particle.position.y > 2) {
-            if (!particle.collidedY) {
-                particle.velocity.y = -particle.velocity.y;
-                collisionCounter++;
-                particle.collidedY = true;
-            }
-        } else {
-            particle.collidedY = false;
+        if (particle.position.x < -4) {
+            particle.position.x += 8;
+        } else if (particle.position.x > 4) {
+            particle.position.x -= 8;
         }
 
-        if (particle.position.z < -2 || particle.position.z > 2) {
-            if (!particle.collidedZ) {
-                particle.velocity.z = -particle.velocity.z;
-                collisionCounter++;
-                particle.collidedZ = true;
-            }
-        } else {
-            particle.collidedZ = false;
+        if (Math.abs(particle.position.y) > 2) {
+            particle.velocity.y = -particle.velocity.y;
+            particle.position.y = Math.sign(particle.position.y) * 2;
+            collisionCounter++;
+        }
+
+        if (Math.abs(particle.position.z) > 2) {
+            particle.velocity.z = -particle.velocity.z;
+            particle.position.z = Math.sign(particle.position.z) * 2;
         }
     });
-    
 
+    if (frameCounter % 30 === 0) {
+        document.getElementById('collisionCount').textContent = "Collisions (Last 30 frames): " + collisionCounter;
+        updateColor(collisionCounter);
+        const meanXVelocity = totalXVelocity / particles.length;
+        document.getElementById('meanVelocity').textContent = "Mean X Velocity: " + meanXVelocity.toFixed(2);
+        collisionCounter = 0;
+    }
+
+    controls.update();
     renderer.render(scene, camera);
-    requestAnimationFrame(animate);
-};
+}
 
- 
 
         animate();
     </script>
-    
 </body>
 </html>
-
